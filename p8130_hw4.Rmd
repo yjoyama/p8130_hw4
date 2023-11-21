@@ -6,8 +6,37 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = F, message = F)
 ```
 
 # Problem 1
+
+```{r}
+# packages
+library(tidyverse)
+
+# blood sugar levels
+bs = tibble(sample = c(125, 123, 117, 123, 115, 112, 128, 118, 124, 111, 116, 109, 125, 120, 113, 123, 112, 118, 121, 118, 122, 115, 105, 118, 131))
+
+# a
+# differences
+bs = bs |> 
+  mutate(
+    d = 120 - sample,
+    d_med = median(d)
+  ) |> 
+  count(d > 0)
+
+# if normal
+
+```
+
+a) Let $d_1, d_2, ..., d_n$ be the differences between 25 pairs with and  $\Delta$ be the median of distribution of   
+$H_0:$ 
+
+
+
+
+
+
 
