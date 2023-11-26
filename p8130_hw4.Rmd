@@ -162,10 +162,6 @@ df_hd = read_csv("HeartDisease.csv") |>
 ```
 
 a) 
-```{r results = T}
-df_hd |> print()
-```
-
 The data set consists of `r ncol(df_hd)` variables and `r nrow(df_hd)` observations.  
 The main outcome in this case is `totalcost` and the main predictor is `e_rvisits`. Other important covariates include `age`, `gender`, `complications`, and `duration`. (It is not specified but I will treat gender 0 as male, and 1 as female)    
 
@@ -197,15 +193,74 @@ df_hd |>
   as_flex_table()
 ```
 
-b) 
+b)  
 
+```{r results = T}
+df_hd |> 
+  ggplot(aes(x = totalcost)) + 
+  geom_histogram()
+```
+As shown in the histogram, the distribution for variable `totalcost` is right-skewed.   
 
+I will log-transform the values of "`totalcost` + 1" (add constant term 1 to avoid $-\infty$). Now, the distribution of `ln_totalcost` is closer to the normal distribution.
+
+```{r results = T, warning = F}
+df_hd |> 
+  mutate(
+    ln_totalcost = log(totalcost + 1)
+  ) |> 
+  ggplot(aes(x = ln_totalcost)) + 
+  geom_histogram()
+```
+
+c) 
+```{r echo = T}
+# create a new variable comp_bin (0: no complications, 1: otherwise)
+df_hd = df_hd |> 
+  mutate(
+    comp_bin = ifelse(complications == 0, 0, 1)
+  )
+```
+
+d) 
+```{r echo = T, results = T}
+df_hd = df_hd |> 
+  mutate(
+    ln_totalcost = log(totalcost + 1)
+  )
+
+# simple linear regression between ln_totalcost and e_rvisits
+reg_cost_slr = lm(ln_totalcost ~ e_rvisits, data = df_hd)
+
+reg_cost_slr |> 
+  broom::tidy()
+
+# 95% CI for model parameter e_rvisits
+confint(reg_cost_slr, "e_rvisits")
+```
+
+p-value for the slope ($\beta_{ER visits}$) appears to be less than 0.05. Thus, we reject the null hypothesis ($\beta_{ER visits}=0$) and conclude that there is a significant linear association between the `ln_totalcost` and `e_rvisits`.  
+95% CI for the true slope is 0.178 - 0.273. With 95% confidence, we estimate that the `ln_totalcost` increases by somewhere between 0.178 and 0.273 for each additional ER visits. 
+
+```{r results = T}
+# scatter plot
+df_hd |> 
+  ggplot(aes(x = e_rvisits, y = ln_totalcost)) +
+  geom_point(alpha = .5) +
+  geom_smooth(method = "lm", se = T, color = "blue") +
+  labs(
+    x = "ER visits",
+    y = "ln(total cost + 1)"
+  )
+```
+
+e1) 
 
 ```{r echo = T, results = T}
-# multiple linear regression model
-reg_cost = lm(totalcost ~ e_rvisits + age + gender + complications + duration, data = df_hd)
+# multiple linear regression model (parameters: comp_bin, e_rvisits)
+reg_cost_mlr1 = lm(ln_totalcost ~ e_rvisits + comp_bin, data = df_hd)
 
-reg_cost |> 
+reg_cost_mlr1 |> 
   broom::tidy()
 ```
 
