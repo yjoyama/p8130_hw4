@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = F, message = F)
+knitr::opts_chunk$set(echo = F, message = F, results = F)
 ```
 
 # Problem 1
@@ -21,18 +21,193 @@ bs = tibble(sample = c(125, 123, 117, 123, 115, 112, 128, 118, 124, 111, 116, 10
 # a
 # differences
 bs = bs |> 
+  filter(sample != 120) |> 
   mutate(
-    d = 120 - sample,
-    d_med = median(d)
-  ) |> 
-  count(d > 0)
+    d = sample - 120,
+    delta = median(d),
+    c = sum(d < 0) # the number of di's where di < 120
+  ) 
 
 # if normal
+24*1/2*1/2 # >= 5
 
+# check
+library(BSDA)
+bs1 =  c(125, 123, 117, 123, 115, 112, 128, 118, 124, 111, 116, 109, 125, 120, 113, 123, 112, 118, 121, 118, 122, 115, 105, 118, 131)
+bs2 = rep(120, times = 25)
+SIGN.test(bs1, bs2, md = 0, alternative = "less")
 ```
 
-a) Let $d_1, d_2, ..., d_n$ be the differences between 25 pairs with and  $\Delta$ be the median of distribution of   
-$H_0:$ 
+a) Let $d_1, d_2, ..., d_n$ be the differences between 25 pairs with and  $\Delta$ be the median of $d_i$.    
+$H_0: \Delta\geq0$   
+$H_1: \Delta<0$  
+
+$n*p(1-p)\geq5$ so I will apply normal-approximation to perform the one-sided sign test.   
+Let C be the number of negative differences, ignoring the zero differences; n* be the number of non-zero differences.  
+Now, C = 14 and n* = 24  
+
+The test statistics is:  
+$\frac{n^*}{2}+\frac{1}{2}+z_{1-\alpha}\sqrt{\frac{n^*}{4}}=$ `r round(24/2+1/2+qnorm(1 - 0.05, mean = 0, sd = 1)*sqrt(24/4), 2)` > C  
+p-value = $1-\Phi(\frac{C-\frac{n^*}{2}-\frac{1}{2}}{\sqrt{\frac{n^*}{4}}})$ = `r round(1-pnorm((14-24/2-1/2)/sqrt(24/4), mean = 0, sd = 1), 2)`  
+
+Therefore, we fail to reject the null hypothesis. We do not have significant ($\alpha=0.05$) evidence to support that the median sugar readings was less than 120. 
+
+```{r}
+bs = tibble(sample = c(125, 123, 117, 123, 115, 112, 128, 118, 124, 111, 116, 109, 125, 120, 113, 123, 112, 118, 121, 118, 122, 115, 105, 118, 131))
+```
+
+b) $H_0:$ The median difference between blood sugar samples and 120 is equal to or greater than zero  
+$H_1:$ The median difference between blood sugar samples and 120 is less than zero   
+
+In order to perform the Wilcoxon Signed-Rank Test (one-sided), I calculated the absolute differences between samples and 120 and their rank as follows.
+```{r echo = T, results = T}
+bs = bs |> 
+  filter(sample != 120) |> # exclude difference = 0
+  group_by(sample) |> 
+  mutate(
+    d = sample - 120,
+    abs_d = abs(d), # absolute differences
+    positive_d = ifelse(d > 0, 1, 0),
+    negative_d = ifelse(d < 0, 1, 0),
+    same_n = n() # count numbers of same blood sugar samples
+  ) |> 
+  ungroup() |> 
+  arrange(abs_d) |> 
+  mutate(
+    rank = rank(abs_d) # assign average rank based on absolute differences
+  ) |> 
+  print()
+```
+
+Let R be the rank sum for negative differences.  
+```{r}
+bs_rank_sum = bs |> 
+  filter(negative_d == 1) |> 
+  mutate(
+    rank_sum = sum(unique(same_n * rank))
+  ) 
+```
+
+R = 187.5  
+Since there are ties, the test statistics T is:  
+$T=\frac{|R-\frac{n^*(n^*+1)}{4}|-\frac{1}{2}}{\sqrt(\frac{n^*(n^*+1)(2n^*+1)}{24}-\frac{\sum_{i=1}^{g}(t_i^3-t_i)}{48})}=$ `r round((abs(187.5-24*25/4)-1/2)/sqrt((24*25*49/24)-((4^3-4)+2*(2^3-2)/48)), 2)` ~ N(0, 1) under $H_0$  
+p-value = $[1-\Phi(T)]=$ `r round((1-pnorm(1.08, mean = 0, sd = 1)), 2)`  
+Therefore, we failed to reject the null hypothesis and cannot conclude that there is a significant ($\alpha=0.05$) evidence that median blood sugar reading was less than 120.
+
+# Problem 2
+```{r}
+# import data
+df_brain = readxl::read_xlsx("Brain.xlsx") |> 
+  janitor::clean_names()
+```
+
+a) 
+```{r echo = T, results = T}
+# exclude homo sapiens
+df_brain_nonh = df_brain |> 
+  filter(species != "Homo sapiens") 
+
+# fit a regression model for the nonhuman data
+reg_nonh = lm(glia_neuron_ratio ~ ln_brain_mass, df_brain_nonh) 
+
+reg_nonh |> 
+  broom::tidy() |> 
+  print()
+```
+
+b) 
+```{r echo = T, results = T}
+# prediction intervals (95%)
+predict(
+  reg_nonh, 
+  newdata = tibble(
+    ln_brain_mass = df_brain |> 
+      filter(species == "Homo sapiens") |>
+      pull(ln_brain_mass)
+  ), 
+  interval = "prediction", level = 0.95
+) |> 
+  round(3)
+```
+
+The predicted glia-neuron ratio for humans given the brain mass using the nonhuman primate relationship is 1.471.
+
+c) 
+```{r echo = T, results = T}
+# prediction intervals (95%)
+predict(
+  reg_nonh, 
+  newdata = tibble(
+    ln_brain_mass = df_brain |> 
+      filter(species == "Homo sapiens") |>
+      pull(ln_brain_mass)
+  ), 
+  interval = "confidence", level = 0.95
+) |> 
+  round(3)
+```
+
+The 95% prediction interval for the predicted human glia-neuron ratio given the brain mass is 1.036 - 1.907, and the 95% confidence interval is 1.230 - 1.713.  
+I would use prediction interval rather than confidence interval when it comes to prediction because the prediction interval is more conservative by accounting for both the uncertainty of estimating a value and the random variability of the sample.  
+
+d) Given the output in part (b), the 95% prediction interval is 1.036 - 1.907. The sample observation of human glia-neuron ratio is 1.65, which is within the range of the 95% prediction interval. Thus, using the regression model for nonhuman data, we can say that the human brain does not have an excessive glia-neuron ratio for its mass compared with other primates.   
+
+e) Because no other primates have brain mass as big as human, the regression model (based on primates' data) may not be able to accurately predict the `glia_neuron_ratio` with large `ln_brain_mass`.
+
+# Problem 3
+```{r}
+# data import
+df_hd = read_csv("HeartDisease.csv") |> 
+  janitor::clean_names()
+```
+
+a) 
+```{r results = T}
+df_hd |> print()
+```
+
+The data set consists of `r ncol(df_hd)` variables and `r nrow(df_hd)` observations.  
+The main outcome in this case is `totalcost` and the main predictor is `e_rvisits`. Other important covariates include `age`, `gender`, `complications`, and `duration`. (It is not specified but I will treat gender 0 as male, and 1 as female)    
+
+The descriptive statistics for all variables of interest is as follows.  
+
+```{r results = T, warning = F}
+# descriptive statistics for all variables of interest
+library(gtsummary)
+library(flextable)
+theme_gtsummary_journal(journal = "nejm")
+
+df_hd |> 
+  select(totalcost, e_rvisits, age, gender, complications, duration) |> 
+  tbl_summary(
+    statistic = list(
+      all_continuous() ~ "{mean} / {median} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = all_continuous() ~ 1,
+    label = list(
+      totalcost ~ "Total cost (USD)",
+      e_rvisits ~ "ER visits",
+      age ~ "Age",
+      gender ~ "Female",
+      complications ~ "No. of complications",
+      duration ~ "Duration of treatment condition (days)"
+    )
+  ) |> 
+  as_flex_table()
+```
+
+b) 
+
+
+
+```{r echo = T, results = T}
+# multiple linear regression model
+reg_cost = lm(totalcost ~ e_rvisits + age + gender + complications + duration, data = df_hd)
+
+reg_cost |> 
+  broom::tidy()
+```
 
 
 
