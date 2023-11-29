@@ -14,6 +14,10 @@ knitr::opts_chunk$set(echo = F, message = F, results = F)
 ```{r}
 # packages
 library(tidyverse)
+library(sjPlot)
+
+# theme
+theme_set(theme_bw())
 
 # blood sugar levels
 bs = tibble(sample = c(125, 123, 117, 123, 115, 112, 128, 118, 124, 111, 116, 109, 125, 120, 113, 123, 112, 118, 121, 118, 122, 115, 105, 118, 131))
@@ -112,7 +116,11 @@ reg_nonh = lm(glia_neuron_ratio ~ ln_brain_mass, df_brain_nonh)
 
 reg_nonh |> 
   broom::tidy() |> 
-  print()
+  mutate_at(2:5, round, 3) |> 
+  mutate(
+    p.value = ifelse(p.value < 0.001, "< 0.001", p.value)
+  ) |> 
+  knitr::kable()
 ```
 
 b) 
@@ -127,7 +135,7 @@ predict(
   ), 
   interval = "prediction", level = 0.95
 ) |> 
-  round(3)
+  round(3) 
 ```
 
 The predicted glia-neuron ratio for humans given the brain mass using the nonhuman primate relationship is 1.471.
@@ -144,7 +152,7 @@ predict(
   ), 
   interval = "confidence", level = 0.95
 ) |> 
-  round(3)
+  round(3) 
 ```
 
 The 95% prediction interval for the predicted human glia-neuron ratio given the brain mass is 1.036 - 1.907, and the 95% confidence interval is 1.230 - 1.713.  
@@ -233,7 +241,12 @@ df_hd = df_hd |>
 reg_cost_slr = lm(ln_totalcost ~ e_rvisits, data = df_hd)
 
 reg_cost_slr |> 
-  broom::tidy()
+  broom::tidy() |> 
+  mutate_at(2:5, round, 3) |> 
+  mutate(
+    p.value = ifelse(p.value < 0.001, "< 0.001", p.value)
+  ) |> 
+  knitr::kable()
 
 # 95% CI for model parameter e_rvisits
 confint(reg_cost_slr, "e_rvisits")
@@ -258,15 +271,72 @@ e1)
 
 ```{r echo = T, results = T}
 # multiple linear regression model (parameters: comp_bin, e_rvisits)
-reg_cost_mlr1 = lm(ln_totalcost ~ e_rvisits + comp_bin, data = df_hd)
+# assess effect modification
+reg_cost_mlr1 = lm(ln_totalcost ~ e_rvisits * comp_bin, data = df_hd)
 
 reg_cost_mlr1 |> 
-  broom::tidy()
+  broom::tidy() |> 
+  mutate_at(2:5, round, 3) |> 
+  mutate(
+    p.value = ifelse(p.value < 0.001, "< 0.001", p.value)
+  ) |> 
+  knitr::kable()
+
+# visualize the interaction
+plot_model(reg_cost_mlr1, type = "int")
 ```
 
+The regression coefficient associated with the interaction term `e_rvisits:comp_bin` is not statistically significant. Thus, it indicates that `comp_bin` is not an effect modifier of the relationship between `ln_totalcost` and `e_rvisits`.  
 
+e2)
 
+```{r echo = T, results = T}
+# multiple linear regression model (parameters: comp_bin, e_rvisits)
+# assess confounder
+# unadjusted MLR
+reg_cost_mlr2 = lm(ln_totalcost ~ e_rvisits, data = df_hd)
 
+reg_cost_mlr2 |> 
+  broom::tidy() |> 
+  mutate_at(2:5, round, 3) |> 
+  mutate(
+    p.value = ifelse(p.value < 0.001, "< 0.001", p.value)
+  ) |> 
+  knitr::kable()
 
+# add comp_bin
+reg_cost_mlr3 = lm(ln_totalcost ~ e_rvisits + comp_bin, data = df_hd)
 
+reg_cost_mlr3 |> 
+  broom::tidy() |> 
+  mutate_at(2:5, round, 3) |> 
+  mutate(
+    p.value = ifelse(p.value < 0.001, "< 0.001", p.value)
+  ) |> 
+  knitr::kable()
+```
+
+After adding `comp_bin` to the model, the change of the coefficient of `e_rvisits` was observed (`r round(((0.203 - 0.225) / 0.203) * 100, 2)`%). By the rule of thumb, we can say that `comp_bin` is a confounder of the relationship between `ln_totalcost` and `e_rvisits`.  
+
+e3)
+Given that `comp_bin` is a potential confounder between `ln_totalcost` and `e_rvisits`, I would include this in the model so that the model can account for the impact of the confounder on the outcome.  
+
+f1) 
+```{r echo = T, results = T}
+# multiple linear regression model (parameters: comp_bin, e_rvisits)
+# assess effect modification
+reg_cost_mlr4 = lm(ln_totalcost ~ e_rvisits + comp_bin + age + gender + duration, data = df_hd)
+
+reg_cost_mlr4 |> 
+  broom::tidy() |> 
+  mutate_at(2:5, round, 3) |> 
+  mutate(
+    p.value = ifelse(p.value < 0.001, "< 0.001", p.value)
+  ) |> 
+  knitr::kable()
+```
+
+Statistically significant linear associations were observed between the outcome and the covariates except for `gender`. Holding all other variables constant, `ln_totalcost` increases by 0.175 for every unit change in `e_rvisits`.
+
+f2) I would use the MLR model (from f1) because ER visits is unlikely to be a single factor that has an impact on the total cost. We need to consider other factors such as age, gender, treatment duration, etc as well.
 
